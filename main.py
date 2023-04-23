@@ -1,3 +1,4 @@
+#
 import os
 import gc
 import cv2
@@ -17,17 +18,41 @@ from efficientnet_pytorch import EfficientNet
 from torch.utils.data import Dataset, DataLoader
 from sklearn.model_selection import train_test_split
 import warnings; warnings.filterwarnings("ignore")
+from sklearn.model_selection import KFold
+from torch.utils.data import Subset
+
+import matplotlib.pyplot as plt
 gc.enable()
 
 
 debug = False
 generate_new = False
-train_df = pd.read_csv("../input/mayo-clinic-strip-ai/train.csv").head(10 if debug else 329)
-test_df = pd.read_csv("../input/mayo-clinic-strip-ai/test.csv")
-dirs = ["../input/mayo-clinic-strip-ai/train/", "../input/mayo-clinic-strip-ai/test/"] # this is the folder of .tif files
+train_df = pd.read_csv("./A/train/train.csv").head(10 if debug else 329)
+test_df = pd.read_csv("./A/train/test.csv") #the folder of train/test labels
+dirs = ["./input/mayo-clinic-strip-ai/train/", "./input/mayo-clinic-strip-ai/test/"] # this is the folder of .tif files
+#It is impossible to upload the whole original dataset(hunderds of GBs).If you want to generate 
+#new dataset,please download the original dataset from the link below and put it in the folder of dirs
+#the function "dataset_preprocess" below is for generating new dataset
+
+# def dataset_preprocess(test_df,train_df):
+#     '''
+#     This function is for changing TIFF data to JPG image'''
+#     if not os.path.exists('./train/'):os.mkdir("./train/")
+#     if not os.path.exists('./train/'):os.mkdir("./test/")  #make folders to store preprocessed images
+    
+#     for df in [train_df,test_df]:
+#         for i in tqdm(range(df.shape[0])):
+#             img_id = df.iloc[i].image_id
+#             train_or_test='train' if df.equals(train_df) else 'test'
+            
+#             if not os.path.exists(f"./{train_or_test}/{img_id}.jpg"):
+#                 img = cv2.resize(tifffile.imread(dirs[0 if df.equals(train_df) else 1] + img_id + ".tif"), (512, 512))
+#                 cv2.imwrite(f"./{train_or_test}/{img_id}.jpg", img)
+#                 del img
+#                 gc.collect()
+# dataset_preprocess(test_df,train_df) #generate new dataset
 
 
-#3
 max_count = max(train_df.label.value_counts())
 #print(max_count)
 for label in ['CE','LAA']:
@@ -44,7 +69,7 @@ class ImgDataset(Dataset):
         self.train = 'label' in df.columns    #self.train是‘是不是训练集’的意思。应该命名为is_train
     def __len__(self): return len(self.df)    
     def __getitem__(self, index):
-        if(1): paths = ["./test/", "./train/"] #generate_new 我现在只做output里缩小版的图片
+        if(1): paths = ["./A/test/", "./A/train/"] #generate_new 我现在只做output里缩小版的图片
         image = cv2.imread(paths[self.train] + self.df.iloc[index].image_id + ".jpg")
 
         image = cv2.resize(image, (512, 512)).transpose(2, 0, 1)
@@ -93,26 +118,8 @@ def train_model(model, dataloaders_dict, criterion, optimizer, num_epochs):
             best_acc = epoch_acc
     return tran_acc_list,valid_acc_list
 
-#model = efficientnet_pytorch.EfficientNet.from_pretrained("efficientnet-b4")
-model = EfficientNet.from_name("efficientnet-b0")
-model.set_swish(memory_efficient = False)
-checkpoint = torch.load('../input/efficientnet-pytorch/efficientnet-b0-08094119.pth')
-model.load_state_dict(checkpoint)
-model.set_swish(memory_efficient = False)
-
-train, val = train_test_split(train_df, test_size=0.2, random_state=42, stratify = train_df.label)
-
-train_loader = DataLoader(ImgDataset(train), batch_size=1, shuffle=True, num_workers=1)
-val_loader = DataLoader(ImgDataset(val), batch_size=1, shuffle=True, num_workers=1)
-dataloaders_dict = {"train": train_loader, "val": val_loader}
-criterion = nn.CrossEntropyLoss()
-
-optimizer = torch.optim.AdamW(model.parameters(), lr=1e-5)
-train_acc,test_acc=train_model(model, dataloaders_dict, criterion, optimizer, 8)
-
 n_splits = 4
-from sklearn.model_selection import KFold
-from torch.utils.data import Subset
+
 kf = KFold(n_splits=n_splits, shuffle=True, random_state=42)
 
 valid_acc_set=[]
@@ -124,7 +131,7 @@ for fold, (train_idx, val_idx) in enumerate(kf.split(train_df)):
     
     model = EfficientNet.from_name("efficientnet-b1")
     model.set_swish(memory_efficient = False)
-    checkpoint = torch.load('../input/efficientnet-pytorch/efficientnet-b1-dbc7070a.pth')
+    checkpoint = torch.load('./A/efficientnet-b1-dbc7070a.pth')
     model.load_state_dict(checkpoint)
     model.set_swish(memory_efficient = False)
     
@@ -138,11 +145,8 @@ for fold, (train_idx, val_idx) in enumerate(kf.split(train_df)):
     valid_acc_set.append(valid_acc)
     train_acc_set.append(train_acc)
 
-
-import matplotlib.pyplot as plt
-
 # Convert tensors to numbers using item()
-train_acc=[]   #
+train_acc=[]
 
 # Plot the training and test accuracy
 plt.plot(range(1,7), train_acc_set[1], label='training accuracy')

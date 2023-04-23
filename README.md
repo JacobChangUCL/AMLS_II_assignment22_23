@@ -22,3 +22,6 @@ matplotlib
 efficientnet_pytorch  
 
 sklearn
+
+if you want to run it on the Kaggle notebook,please download Mayo dataset and EfficientNet-Pytorch as the input
+of the Kaggle notebook
